@@ -1,0 +1,508 @@
+{
+  "name": "Email_Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -720,
+        -80
+      ],
+      "id": "24c5f217-490d-4371-844a-a509d9dfb99b",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "xJmvtR13PEMkyZvE",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "56b9d9f2-c33e-4525-bab7-04888905f761",
+              "name": "emailBody",
+              "value": "={{ $json.snippet }}",
+              "type": "string"
+            },
+            {
+              "id": "9ee7a918-662e-411c-ba5e-b73fae091a4a",
+              "name": "threadID",
+              "value": "={{ $json.threadId }}",
+              "type": "string"
+            },
+            {
+              "id": "333040bc-2a23-4985-9d76-71ce57ce515f",
+              "name": "from",
+              "value": "={{ $json.From }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -560,
+        -80
+      ],
+      "id": "aaba9cac-9d4c-48d9-8c65-aecd21921431",
+      "name": "Content"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        120
+      ],
+      "id": "88ec6ff1-2960-49ff-ae0e-2e5bd1621130",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "kIKT7QP2scAl0Df2",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here is upcoming email: {{ $json.emailBody }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=Prompt:\nAnalyze the content of the following email and determine whether it is related to customer support. If the email pertains to any of the following topics, mark customerSupport as true; otherwise, mark it as false.\n\nCustomer Support Topics Include:\n\nQuestions about order status, tracking, or changes  \nIssues with damaged or defective products  \nRefund or return requests  \nSubscription cancellations or adjustments  \nTechnical issues with products, website, or app  \nPayment or billing inquiries  \nRequests for speaking with a support representative  \n\nOutput:  \nProvide the result in JSON format with a field named \"customerSupport\" set to true or false.\n"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -380,
+        -80
+      ],
+      "id": "54d092f3-17b7-4e9c-ab57-bc55b372612e",
+      "name": "Customer Support"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text }}",
+                    "rightValue": "customer support",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "a413c188-d109-4253-9a54-56529fcc8473"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "True"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "715efee2-eb95-4d3e-8837-82cff3aa2bfb",
+                    "leftValue": "={{ $json.text }}",
+                    "rightValue": "customer support",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notContains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "False"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -80,
+        -80
+      ],
+      "id": "4238f763-8afa-4df3-beae-7c1d234ac266",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Content').item.json.emailBody }}",
+        "options": {
+          "systemMessage": "=# System Role\nYou are a highly skilled and empathetic customer support agent specializing in drafting professional and helpful responses to incoming customer emails.\n\n# Task Specification\n1. Take an incoming customer support email.\n2. Use the **\"customerSupportDocs\"** tool to look up relevant policies or FAQs to ensure accurate and policy-compliant responses.\n3. Create a draft response using the **\"createDraft\"** tool.\n4. After drafting the email, provide a concise summary of the email content.\n\nEnsure the response:\n- Directly addresses the customer's query.\n- Maintains a polite and professional tone.\n- Ends with the sign-off:  \n  **\"Kelly, Customer Support ABC Corp.\"**\n\n# Specifics and Context\n- You must use the **\"customerSupportDocs\"** tool before drafting to ensure the response aligns with company policies and FAQs.\n- The **\"createDraft\"** tool must be used to finalize and prepare the draft for sending.\n- The summary should briefly explain the issue addressed and the key points or resolution provided in the response.\n\n# Examples\n\n## Example 1  \n**Incoming Email:**  \n\"I ordered a product a week ago, but it still hasn't shipped. When will it arrive?\"\n\n**customerSupportDocs Search Query:**  \n\"shipping timelines\"\n\n**Relevant Info Found:**  \nStandard shipping takes 7–10 business days. Delays may occur during high-demand periods.\n\n**Draft Response (via createDraft):**  \nDear [Customer's Name],  \nThank you for reaching out regarding your order. Standard shipping typically takes 7–10 business days. However, during high-demand periods, there may be slight delays.  \nI've checked your order, and it's currently being prepared for shipment. You should receive a tracking number shortly. If you have any further questions, feel free to let me know.\n\nBest regards,  \nKelly, Customer Support ABC Corp.\n\n**Summary:**  \nResponded to customer about shipping timeline (7–10 days) and explained the order is being prepared. Offered reassurance and assistance.\n\n---\n\n## Example 2  \n**Incoming Email:**  \n\"I want to cancel my subscription and get a refund for this month.\"\n\n**customerSupportDocs Search Query:**  \n\"subscription cancellation policy\"\n\n**Relevant Info Found:**  \nCancellations must be made 48 hours before the next billing cycle to avoid charges.\n\n**Draft Response (via createDraft):**  \nDear [Customer's Name],  \nThank you for contacting us about your subscription charge. Our records show the cancellation was processed after the billing cycle had begun. To avoid future charges, cancellations must be made at least 48 hours prior to the next billing cycle.  \nAs a courtesy, I’ve initiated a refund for this month’s charge. Please allow 3–5 business days for the refund to appear on your statement.  \nIf you have any other questions, feel free to reach out.\n\nBest regards,  \nKelly, Customer Support ABC Corp.\n\n**Summary:**  \nExplained the 48-hour cancellation policy and issued a one-time courtesy refund. Invited customer to ask further questions.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -120
+      ],
+      "id": "f233d42c-2359-4aab-97c0-6a075d3f3010",
+      "name": "Customer Support Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        200,
+        100
+      ],
+      "id": "844451da-5cf9-4fa1-aa82-62a85d79bcf0",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "id": "kIKT7QP2scAl0Df2",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Retireves information about our customer support policies and FAQs"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1.1,
+      "position": [
+        360,
+        100
+      ],
+      "id": "f6240b48-992b-416d-b947-812f7c3c8069",
+      "name": "Answer questions with a vector store"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        500,
+        320
+      ],
+      "id": "e2c1b9d4-5638-4ba1-9a0c-eaef31affdda",
+      "name": "Groq Chat Model2",
+      "credentials": {
+        "groqApi": {
+          "id": "kIKT7QP2scAl0Df2",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "firstdatabase",
+          "mode": "list",
+          "cachedResultName": "firstdatabase"
+        },
+        "options": {
+          "pineconeNamespace": "customersupport"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        180,
+        240
+      ],
+      "id": "a608debb-1f0f-4e2a-8516-6a1dddd09395",
+      "name": "Pinecone Vector Store",
+      "credentials": {
+        "pineconeApi": {
+          "id": "JLYR1URtEWpnG3Km",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        280,
+        375.5703125
+      ],
+      "id": "fe88c8d8-8e46-497f-b031-efdb57ec26af",
+      "name": "Embeddings Mistral Cloud",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "By8GMNqVV718knle",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ $fromAI(\"subject\") }}",
+        "message": "={{ $fromAI(\"emailBody\") }}",
+        "options": {
+          "threadId": "={{ $('Content').item.json.threadID }}",
+          "sendTo": "={{ $('Content').item.json.from }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        160
+      ],
+      "id": "78da6a1a-534f-42e4-8d9b-e821f52ea2f8",
+      "name": "createDraft",
+      "webhookId": "2cb08ce6-c70c-4093-bb7a-6b7bb24345dd",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "xJmvtR13PEMkyZvE",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        240
+      ],
+      "id": "269e51d2-8813-455c-8063-78a6c1c4651d",
+      "name": "No Operation, do nothing"
+    }
+  ],
+  "pinData": {
+    "Gmail Trigger": [
+      {
+        "json": {
+          "id": "197ba248cdf20695",
+          "threadId": "197ba248cdf20695",
+          "snippet": "Hey, How do I track my order? And what is the return policy? Best Regards, Abdul Razzaq",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 5907,
+          "historyId": "617943",
+          "internalDate": "1751174633000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Abdul Razzaq <ar8937562@gmail.com>",
+          "Subject": "Order track",
+          "To": "abdul.razzaq39390@gmail.com"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content": {
+      "main": [
+        [
+          {
+            "node": "Customer Support",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Customer Support",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Support": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Customer Support Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Customer Support Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer questions with a vector store": {
+      "ai_tool": [
+        [
+          {
+            "node": "Customer Support Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Answer questions with a vector store",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "Answer questions with a vector store",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Mistral Cloud": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Support Agent": {
+      "main": [
+        []
+      ]
+    },
+    "createDraft": {
+      "ai_tool": [
+        [
+          {
+            "node": "Customer Support Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "22148dde-8d62-4f20-9e42-276c94a0cc99",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7cac9a7a0a63812e41b1e94b1b69e3ffef7529633b7e9b913fb43b82dc581723"
+  },
+  "id": "XmR1HF0agoXyVHRO",
+  "tags": []
+}
